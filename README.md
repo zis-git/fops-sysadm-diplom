@@ -20,6 +20,7 @@
 
 **Примечание**: в курсовой работе используется система мониторинга Prometheus. Вместо Prometheus вы можете использовать Zabbix. Задание для курсовой работы с использованием Zabbix находится по [ссылке](https://github.com/netology-code/fops-sysadm-diplom/blob/diplom-zabbix/README.md).
 
+**Перед началом работы над дипломной работой изучите [Памятку по экономии облачных ресурсов](https://github.com/netology-code/devops-materials/blob/master/cloudwork.MD).**   
 
 ## Инфраструктура
 Для развёртки инфраструктуры используйте Terraform и Ansible. 
