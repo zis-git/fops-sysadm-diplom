@@ -473,4 +473,6 @@ grafana_YYYY-MM-DD_HHMM.tgz
 <img width="2175" height="233" alt="Alert-gmail" src="https://github.com/user-attachments/assets/10f78c13-5561-4846-ba00-a6fc10e94dce" />
 <img width="3325" height="974" alt="YandexCloud" src="https://github.com/user-attachments/assets/1ef7e39e-1a15-4fc4-8e68-d496b1a0b02f" />
 <img width="2605" height="968" alt="PrivateCloud" src="https://github.com/user-attachments/assets/68e597c3-0235-41b2-9e8b-429f0b9efbdc" />
+<img width="2976" height="1052" alt="Prometheus" src="https://github.com/user-attachments/assets/c77fd52b-9bf4-4d45-bc7b-dc3be5774773" />
+<img width="2549" height="1231" alt="OpenSearchDashboard" src="https://github.com/user-attachments/assets/1db11c4a-c12b-454d-a816-2eb92563725e" />
 
