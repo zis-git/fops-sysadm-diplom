@@ -1,20 +1,6 @@
-#  Курсовая работа на профессии "DevOps-инженер с нуля"
+#  Курсовая работа на профессии "DevOps-инженер с нуля" Голоха Е.В.
 
-Содержание
-==========
-* [Задача](#Задача)
-* [Инфраструктура](#Инфраструктура)
-    * [Сайт](#Сайт)
-    * [Мониторинг](#Мониторинг)
-    * [Логи](#Логи)
-    * [Сеть](#Сеть)
-    * [Резервное копирование](#Резервное-копирование)
-    * [Дополнительно](#Дополнительно)
-* [Выполнение работы](#Выполнение-работы)
-* [Критерии сдачи](#Критерии-сдачи)
-* [Как правильно задавать вопросы дипломному руководителю](#Как-правильно-задавать-вопросы-дипломному-руководителю) 
 
----------
 ## Задача
 Ключевая задача — разработать отказоустойчивую инфраструктуру для сайта, включающую мониторинг, сбор логов и резервное копирование основных данных. Инфраструктура должна размещаться в [Yandex Cloud](https://cloud.yandex.com/).
 
@@ -90,13 +76,306 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 6. Работа оформлена так, чтобы были понятны ваши решения и компромиссы. 
 7. Если использованы дополнительные репозитории, доступ к ним открыт. 
 
-## Как правильно задавать вопросы дипломному руководителю
-Что поможет решить большинство частых проблем:
-1. Попробовать найти ответ сначала самостоятельно в интернете или в материалах курса и только после этого спрашивать у дипломного руководителя. Навык поиска ответов пригодится вам в профессиональной деятельности.
-2. Если вопросов больше одного, присылайте их в виде нумерованного списка. Так дипломному руководителю будет проще отвечать на каждый из них.
-3. При необходимости прикрепите к вопросу скриншоты и стрелочкой покажите, где не получается. Программу для этого можно скачать [здесь](https://app.prntscr.com/ru/).
+## Решение
 
-Что может стать источником проблем:
-1. Вопросы вида «Ничего не работает. Не запускается. Всё сломалось». Дипломный руководитель не сможет ответить на такой вопрос без дополнительных уточнений. Цените своё время и время других.
-2. Откладывание выполнения дипломной работы на последний момент.
-3. Ожидание моментального ответа на свой вопрос. Дипломные руководители — работающие инженеры, которые занимаются, кроме преподавания, своими проектами. Их время ограничено, поэтому постарайтесь задавать правильные вопросы, чтобы получать быстрые ответы :)
+Хосты и порты
+Bastion: 89.169.142.98 (ssh: ubuntu@...)
+Prometheus + Alertmanager: 10.10.2.21 (9090, 9093)
+Grafana: 10.10.1.19 (3000)
+OpenSearch: 10.10.2.36 (9200)
+OpenSearch Dashboards: 10.10.1.8 (5601)
+Web-ноды: 10.10.2.33, 10.10.3.34
+nginxlog-exporter на каждой: 4040
+
+
+Ansible
+Инвентори (файл inventory)
+
+[web]
+10.10.2.33 ansible_user=ubuntu
+10.10.3.34 ansible_user=ubuntu
+
+[prometheus]
+10.10.2.21 ansible_user=ubuntu
+
+[grafana]
+10.10.1.19 ansible_user=ubuntu
+
+[elasticsearch]
+10.10.2.36 ansible_user=ubuntu
+
+[kibana]
+10.10.1.8 ansible_user=ubuntu
+
+
+
+
+
+ansible.cfg
+[defaults]
+inventory = ./inventory
+vault_password_file = ~/.vault_pass.txt
+
+[ssh_connection]
+ssh_args = -o ProxyJump=ubuntu@89.169.142.98
+
+
+
+
+
+Доступ (SSH-туннели)
+Linux/macOS
+
+Prometheus (9090) + Alertmanager (9093)
+ssh -J ubuntu@89.169.142.98 -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 ubuntu@10.10.2.21
+
+Grafana (3000)
+ssh -J ubuntu@89.169.142.98 -L 3000:127.0.0.1:3000 ubuntu@10.10.1.19
+
+# OpenSearch Dashboards (5601)
+ssh -J ubuntu@89.169.142.98 -L 5601:127.0.0.1:5601 ubuntu@10.10.1.8
+
+
+Windows PowerShell
+
+#Prometheus + Alertmanager
+ssh -J ubuntu@89.169.142.98 `
+    -L 9090:127.0.0.1:9090 `
+    -L 9093:127.0.0.1:9093 `
+    ubuntu@10.10.2.21
+
+#Grafana
+ssh -J ubuntu@89.169.142.98 `
+    -L 3000:127.0.0.1:3000 `
+    ubuntu@10.10.1.19
+
+#OpenSearch Dashboards
+ssh -J ubuntu@89.169.142.98 `
+    -L 5601:127.0.0.1:5601 `
+    ubuntu@10.10.1.8
+
+
+
+
+OpenSearch / Dashboards
+Контейнер OpenSearch Dashboards запущен на 10.10.1.8:5601 с отключённым security-плагином:
+    
+docker run -d --name osd --restart unless-stopped \
+  -p 5601:5601 \
+  -e OPENSEARCH_HOSTS='["http://10.10.2.36:9200"]' \
+  -e DISABLE_SECURITY_DASHBOARDS_PLUGIN=true \
+  opensearchproject/opensearch-dashboards:2.13.0
+В Dashboards:
+
+Index pattern: nginx-*
+
+Discover/Visualize: построены панели по remote_addr, status, request_time и т.д.
+
+
+
+
+Prometheus
+Конфиг /etc/prometheus/prometheus.yml
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['10.10.2.33:9100','10.10.3.34:9100']
+
+  - job_name: 'nginxlog_exporter'
+    static_configs:
+      - targets: ['10.10.2.33:4040','10.10.3.34:4040']
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['127.0.0.1:9093']
+
+
+Экспортеры nginx логов
+Формат логов c $request_time:
+
+/etc/nginx/conf.d/logformat_timed.conf
+log_format main_timed '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" "$http_user_agent" '
+                      '$request_time';
+
+
+Экспортер (Docker) на каждой web-ноде:
+/etc/nginxlog_exporter.yml
+
+listen:
+  address: 0.0.0.0
+  port: 4040
+
+namespaces:
+  - name: nginx
+    format: '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time'
+    source_files:
+      - /var/log/nginx/access.log
+    histogram_buckets: [0.05, 0.1, 0.2, 0.5, 1, 2, 5]
+
+Запуск контейнера:
+docker run -d --name nginxlog-exporter --restart unless-stopped \
+  -p 4040:4040 \
+  -v /etc/nginxlog_exporter.yml:/config.yml:ro \
+  -v /var/log/nginx:/var/log/nginx:ro \
+  quay.io/martinhelmich/prometheus-nginxlog-exporter:v1.11.0 \
+  -config-file /config.yml
+Проверка метрик на ноде:
+curl -s http://127.0.0.1:4040/metrics | grep -m1 '^nginx_http_response_count_total'
+
+
+
+Правила алертов
+/etc/prometheus/rules/general.yml (Watchdog, InstanceDown, CPU, Disk)
+/etc/prometheus/rules/nginx.yml (5xx share, p95 latency):
+
+
+groups:
+- name: nginx-alerts
+  rules:
+  - alert: High5xxShareWarning
+    expr: |
+      100 * (sum(rate(nginx_http_response_count_total{status=~"5.."}[5m])) or vector(0))
+        / clamp_min(sum(rate(nginx_http_response_count_total[5m])), 1e-12) > 5
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: '5xx > 5% ({{$labels.instance}})' }
+
+  - alert: High5xxShareCritical
+    expr: |
+      100 * (sum(rate(nginx_http_response_count_total{status=~"5.."}[5m])) or vector(0))
+        / clamp_min(sum(rate(nginx_http_response_count_total[5m])), 1e-12) > 20
+    for: 5m
+    labels: { severity: critical }
+    annotations: { summary: '5xx > 20% ({{$labels.instance}})' }
+
+  - alert: SlowP95Warning
+    expr: |
+      histogram_quantile(0.95,
+        sum by (le) (rate({__name__=~"nginx_http_.*_time_seconds_bucket"}[5m]))
+      ) > 0.5
+    for: 10m
+    labels: { severity: warning }
+    annotations: { summary: 'p95 > 0.5s ({{$labels.instance}})' }
+
+  - alert: SlowP95Critical
+    expr: |
+      histogram_quantile(0.95,
+        sum by (le) (rate({__name__=~"nginx_http_.*_time_seconds_bucket"}[5m]))
+      ) > 1.5
+    for: 5m
+    labels: { severity: critical }
+    annotations: { summary: 'p95 > 1.5s ({{$labels.instance}})' }
+
+
+
+Alertmanager (почта)
+Секреты (Ansible Vault)
+group_vars/all/vault.yml (зашифрованный):
+
+alertmanager_gmail_user: "evgeniy.golokha@gmail.com"
+alertmanager_gmail_app_password: "<app_password_here>"
+Файл пароля:
+printf '%s\n' '******' > ~/.vault_pass.txt
+chmod 600 ~/.vault_pass.txt
+
+#для проверки
+ansible-vault view group_vars/all/vault.yml
+
+
+Шаблон конфигурации
+alertmanager.yml.j2:
+
+global:
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: '{{ alertmanager_gmail_user }}'
+  smtp_auth_username: '{{ alertmanager_gmail_user }}'
+  smtp_auth_password: '{{ alertmanager_gmail_app_password }}'
+  smtp_require_tls: true
+
+route:
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: email_me
+
+receivers:
+  - name: email_me
+    email_configs:
+      - to: '{{ alertmanager_gmail_user }}'
+        send_resolved: true
+        headers:
+          Subject: '[Alertmanager] {{ .Status | toUpper }} {{ .CommonLabels.alertname }}'
+Деплой и рестарт:
+ansible -i inventory prometheus -b -m template \
+  -a "src=alertmanager.yml.j2 dest=/etc/alertmanager/alertmanager.yml mode=0600"
+
+ansible -i inventory prometheus -b -m systemd \
+  -a "name=alertmanager state=restarted"
+
+  Смоук-тест почты
+ansible -i inventory prometheus -m shell -a '
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ);
+END=$(date -u -d "+2 minutes" +%Y-%m-%dT%H:%M:%SZ);
+cat > /tmp/test-alert.json <<JSON
+[
+  {"labels":{"alertname":"TestEmail","severity":"warning"},
+   "annotations":{"summary":"Test email via Alertmanager (Gmail)"},
+   "startsAt":"'"$TS"'","endsAt":"'"$END"'"}]
+JSON
+curl -s -X POST -H "Content-Type: application/json" \
+  --data-binary @/tmp/test-alert.json http://127.0.0.1:9093/api/v2/alerts; echo
+'
+
+Grafana
+Провижнинг дашборда
+Провайдер:
+
+# grafana_dash_provider.yml
+apiVersion: 1
+providers:
+  - name: kursovaya
+    orgId: 1
+    folder: Kursovaya
+    type: file
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+
+Дашборд kursovaya-nginx.json — панели:
+RPS (sum rate)
+Status codes (/s) по label status
+5xx доля, %
+p95 response time, s
+топ client IP / пути — по необходимости
+Копирование внутрь контейнера:
+
+ansible -i inventory grafana -b -m copy -a "src=grafana_dash_provider.yml dest=/tmp/kursovaya_provider.yml mode=0644"
+ansible -i inventory grafana -b -m copy -a "src=kursovaya-nginx.json dest=/tmp/kursovaya-nginx.json mode=0644"
+
+ansible -i inventory grafana -b -m shell -a '
+CN=$(docker ps --filter "publish=3000" --format "{{.Names}}" | head -n1); [ -n "$CN" ];
+docker exec -u 0 "$CN" mkdir -p /etc/grafana/provisioning/dashboards /var/lib/grafana/dashboards;
+docker cp /tmp/kursovaya_provider.yml  "$CN":/etc/grafana/provisioning/dashboards/kursovaya.yml;
+docker cp /tmp/kursovaya-nginx.json   "$CN":/var/lib/grafana/dashboards/kursovaya-nginx.json;
+docker exec -u 0 "$CN" sh -c "chown -R 472:472 /var/lib/grafana/dashboards || true";
+docker restart "$CN"
+'
+
+
+Скриншоты:
+<img width="3047" height="994" alt="Alert" src="https://github.com/user-attachments/assets/619b1af1-80c8-4cfe-b1f2-b21fc76f0939" />
+<img width="2529" height="1344" alt="Grafana" src="https://github.com/user-attachments/assets/1aa07433-a8cb-4ecc-9413-debbea986efc" />
+<img width="2549" height="1224" alt="Grafana_dash" src="https://github.com/user-attachments/assets/a0787f54-fd4b-4f24-8c26-2df5ea084eeb" />
+<img width="2175" height="233" alt="Alert-gmail" src="https://github.com/user-attachments/assets/10f78c13-5561-4846-ba00-a6fc10e94dce" />
+
