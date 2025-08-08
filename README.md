@@ -459,11 +459,15 @@ prometheus_YYYY-MM-DD_HHMM.tgz
 alertmanager_YYYY-MM-DD_HHMM.tgz
 grafana_YYYY-MM-DD_HHMM.tgz
 
+Пояснение почему OpenSearch Dashboard: 
 
 
-
-
-
+Совместимость 100%. Kibana — продукт Elastic и официально не поддерживает OpenSearch 2.x. Даже если “подружить”, начнутся баги с API/миграциями. OpenSearch Dashboards — форк Kibana 7.10, развивается вместе с OpenSearch, поэтому всё (Discover, визуализации, Saved Objects) работает из коробки.
+Без лицензий и сюрпризов. OpenSearch/OSD — Apache 2.0. Не нужно разбираться с Elastic License, платными фичами и т.д.
+Проще в лабе. Мы подняли opensearchproject/opensearch-dashboards и отключили security-плагин (DISABLE_SECURITY_DASHBOARDS_PLUGIN=true) — сразу зашли на 5601 без первичной настройки пользователей.
+Те же привычные UX-паттерны. Интерфейс очень похож на “классическую” Kibana: Discover → Visualize → Dashboard, index pattern nginx-* — поэтому учиться заново не пришлось.
+Меньше рисков по версиям. Бэкенд 2.13.0 ↔️ Dashboards 2.13.0 — одна ветка релизов, нет рассинхрона.
+Итого: это самый надёжный и беспроблемный UI для нашего стека логов на OpenSearch.
 
 
 Скриншоты:
