@@ -78,6 +78,36 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 
 ## Решение
 
+Архитектура
+
+flowchart LR
+    user[Вы (локальный ПК)] -->|SSH ProxyJump| bastion[(Bastion)\n89.169.142.98]
+    bastion -->|SSH| prom[(Prometheus/Alertmanager)\n10.10.2.21]
+    bastion -->|SSH| grafana[(Grafana)\n10.10.1.19]
+    bastion -->|SSH| osd[(OpenSearch Dashboards)\n10.10.1.8]
+    bastion -->|SSH| ose[(OpenSearch)\n10.10.2.36]
+
+    subgraph WEB-NODES
+      web1[(Web #1 nginx)\n10.10.2.33]
+      web2[(Web #2 nginx)\n10.10.3.34]
+    end
+
+    prom <-->|HTTP 9090| grafana
+    prom <-->|/api 9093| amgr[(Alertmanager в составе 10.10.2.21)]
+    grafana -->|Prometheus datasource| prom
+
+    web1 -->|nginx access.log| exporter1[[nginxlog exporter 4040]]
+    web2 -->|nginx access.log| exporter2[[nginxlog exporter 4040]]
+    prom -->|scrape 4040| exporter1
+    prom -->|scrape 4040| exporter2
+
+    web1 -->|файловые логи| fluent1[[fluent-bit]]
+    web2 -->|файловые логи| fluent2[[fluent-bit]]
+    fluent1 -->|HTTP 9200| ose
+    fluent2 -->|HTTP 9200| ose
+    osd -->|HTTP 5601| ose
+
+
 Хосты и порты
 Bastion: 89.169.142.98 (ssh: ubuntu@...)
 Prometheus + Alertmanager: 10.10.2.21 (9090, 9093)
@@ -358,6 +388,7 @@ Status codes (/s) по label status
 5xx доля, %
 p95 response time, s
 топ client IP / пути — по необходимости
+
 Копирование внутрь контейнера:
 
 ansible -i inventory grafana -b -m copy -a "src=grafana_dash_provider.yml dest=/tmp/kursovaya_provider.yml mode=0644"
@@ -371,6 +402,68 @@ docker cp /tmp/kursovaya-nginx.json   "$CN":/var/lib/grafana/dashboards/kursovay
 docker exec -u 0 "$CN" sh -c "chown -R 472:472 /var/lib/grafana/dashboards || true";
 docker restart "$CN"
 '
+Отчёт по резервному копированию (Prometheus, Alertmanager, Grafana)
+
+Организовано point-in-time резервное копирование основных компонентов мониторинга:
+Prometheus (конфиг + база TSDB) — хост 10.10.2.21.
+Alertmanager (конфиг + state) — хост 10.10.2.21.
+Grafana (данные, плагины, провиженинг дашбордов) — контейнер grafana на 10.10.1.19.
+
+Что именно сохраняем
+
+Prometheus: /etc/prometheus, /var/lib/prometheus
+(перед съёмом архива Prometheus останавливается, после — запускается).
+Alertmanager: /etc/alertmanager, /var/lib/alertmanager
+(без остановки сервиса; state небольшой и не критичен к snapshot).
+Grafana (внутри контейнера): /var/lib/grafana, /etc/grafana/provisioning.
+
+Скрипты резервного копирования
+Prometheus + Alertmanager (на 10.10.2.21)
+/root/backup_prom_am.sh
+
+
+#!/usr/bin/env bash
+set -euo pipefail
+TS=$(date +%F_%H%M)
+mkdir -p /root/backups
+
+#Prometheus: остановка → бэкап → запуск
+systemctl stop prometheus
+tar czf /root/backups/prometheus_${TS}.tgz /etc/prometheus /var/lib/prometheus
+systemctl start prometheus
+
+#Alertmanager: бэкап (без остановки)
+tar czf /root/backups/alertmanager_${TS}.tgz /etc/alertmanager /var/lib/alertmanager || true
+ls -lh /root/backups/*_${TS}.tgz
+
+
+Grafana (на 10.10.1.19)
+/root/backup_grafana.sh
+
+#!/usr/bin/env bash
+set -euo pipefail
+TS=$(date +%F_%H%M)
+CN=${1:-grafana}
+mkdir -p /root/backups
+
+#Упаковать данные внутри контейнера и вынести архив на хост
+docker exec -u 0 "$CN" sh -c \
+  "tar czf /tmp/grafana_${TS}.tgz /var/lib/grafana /etc/grafana/provisioning 2>/dev/null \
+   || tar czf /tmp/grafana_${TS}.tgz /var/lib/grafana"
+docker cp "$CN":/tmp/grafana_${TS}.tgz /root/backups/
+ls -lh /root/backups/grafana_${TS}.tgz
+
+Где лежат бэкапы и формат имён
+На соответствующих хостах в каталоге /root/backups/:
+prometheus_YYYY-MM-DD_HHMM.tgz
+alertmanager_YYYY-MM-DD_HHMM.tgz
+grafana_YYYY-MM-DD_HHMM.tgz
+
+
+
+
+
+
 
 
 Скриншоты:
@@ -378,4 +471,6 @@ docker restart "$CN"
 <img width="2529" height="1344" alt="Grafana" src="https://github.com/user-attachments/assets/1aa07433-a8cb-4ecc-9413-debbea986efc" />
 <img width="2549" height="1224" alt="Grafana_dash" src="https://github.com/user-attachments/assets/a0787f54-fd4b-4f24-8c26-2df5ea084eeb" />
 <img width="2175" height="233" alt="Alert-gmail" src="https://github.com/user-attachments/assets/10f78c13-5561-4846-ba00-a6fc10e94dce" />
+<img width="3325" height="974" alt="YandexCloud" src="https://github.com/user-attachments/assets/1ef7e39e-1a15-4fc4-8e68-d496b1a0b02f" />
+<img width="2605" height="968" alt="PrivateCloud" src="https://github.com/user-attachments/assets/68e597c3-0235-41b2-9e8b-429f0b9efbdc" />
 
