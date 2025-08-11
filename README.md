@@ -95,9 +95,8 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 ---
 
 ## Архитектура
-
+```mermaid
 flowchart LR
-    %% Узлы
     user["Локальный ПК"]
     bastion["Bastion<br/>89.169.142.98"]
 
@@ -117,31 +116,26 @@ flowchart LR
     fluent2["fluent-bit"]
     amgr["Alertmanager (на 10.10.2.21)"]
 
-    %% Подключения
     user -->|SSH ProxyJump| bastion
     bastion -->|SSH| prom
     bastion -->|SSH| grafana
     bastion -->|SSH| osd
     bastion -->|SSH| ose
 
-    %% Интеграции мониторинга
     prom <-->|HTTP 9090| grafana
     prom <-->|/api 9093| amgr
     grafana -->|Prometheus datasource| prom
 
-    %% Экспортеры nginx
     web1 -->|nginx access.log| exporter1
     web2 -->|nginx access.log| exporter2
     prom -->|scrape 4040| exporter1
     prom -->|scrape 4040| exporter2
 
-    %% Логи в OpenSearch
     web1 -->|файловые логи| fluent1
     web2 -->|файловые логи| fluent2
     fluent1 -->|HTTP 9200| ose
     fluent2 -->|HTTP 9200| ose
     osd -->|HTTP 5601| ose
-
 
 ---
 
