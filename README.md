@@ -95,11 +95,12 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 ---
 
 ## Архитектура
+## Архитектура
+
 ```mermaid
 flowchart LR
     user["Локальный ПК"]
     bastion["Bastion<br/>89.169.142.98"]
-
     prom["Prometheus + Alertmanager<br/>10.10.2.21"]
     grafana["Grafana<br/>10.10.1.19"]
     osd["OpenSearch Dashboards<br/>10.10.1.8"]
@@ -137,7 +138,6 @@ flowchart LR
     fluent2 -->|HTTP 9200| ose
     osd -->|HTTP 5601| ose
 
----
 
 ## Хосты и порты
 
