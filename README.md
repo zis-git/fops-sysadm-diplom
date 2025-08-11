@@ -529,3 +529,5 @@ ls -lh /root/backups | grep -E 'prometheus|alertmanager|grafana' || true
 <img width="2976" height="1052" alt="Prometheus" src="https://github.com/user-attachments/assets/c77fd52b-9bf4-4d45-bc7b-dc3be5774773" />
 <img width="2549" height="1231" alt="OpenSearchDashboard" src="https://github.com/user-attachments/assets/1db11c4a-c12b-454d-a816-2eb92563725e" />
 
+Файлы курсовой
+https://github.com/zis-git/fops-sysadm-diplom/blob/92c7752319dd9c4141dda16de967a5f3c29f3e08/kursovaya.zip
