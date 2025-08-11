@@ -68,11 +68,16 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 6. Работа оформлена так, чтобы были понятны ваши решения и компромиссы. 
 7. Если использованы дополнительные репозитории, доступ к ним открыт. 
 
-## Решение
+# Курсовая работа — Развёртывание отказоустойчивой инфраструктуры с мониторингом, логированием и резервным копированием в Yandex Cloud
 
-# 📡 Проект мониторинга и логирования
+## Введение
+Проект выполнен в рамках курсовой работы с целью развёртывания отказоустойчивой инфраструктуры веб-приложения в Yandex Cloud.  
+Инфраструктура включает мониторинг (Prometheus, Alertmanager, Grafana), сбор и анализ логов (OpenSearch, OpenSearch Dashboards), а также автоматическое резервное копирование (snapshot) дисков ВМ.  
+Доступ к внутренним узлам организован через bastion-хост по SSH с ProxyJump.
 
-## 📑 Оглавление
+---
+
+## Оглавление
 - [Архитектура](#архитектура)
 - [Хосты и порты](#хосты-и-порты)
 - [Ansible](#ansible)
@@ -89,10 +94,7 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 
 ---
 
-## 🏗 Архитектура
-
-Была спроектирована архитектура системы, включающая Bastion-хост, Prometheus с Alertmanager, Grafana, OpenSearch, OpenSearch Dashboards и две web-ноды с nginx.  
-Схема представлена в формате Mermaid:
+## Архитектура
 
 ```mermaid
 flowchart LR
@@ -125,25 +127,22 @@ flowchart LR
 
 ---
 
-## 📍 Хосты и порты
+## Хосты и порты
 
-Были развернуты следующие хосты и сервисы:
-
-| Сервис                  | Адрес            | Порты      |
-|-------------------------|------------------|------------|
-| **Bastion**             | 89.169.142.98    | SSH        |
-| **Prometheus + Alertmanager** | 10.10.2.21 | 9090, 9093 |
-| **Grafana**             | 10.10.1.19       | 3000       |
-| **OpenSearch**          | 10.10.2.36       | 9200       |
-| **OpenSearch Dashboards** | 10.10.1.8     | 5601       |
-| **Web-ноды**            | 10.10.2.33, 10.10.3.34 | 4040 (exporter) |
+| Сервис                  | IP                    | Порты                   |
+|------------------------|-----------------------|-------------------------|
+| Bastion                | 89.169.142.98         | SSH (ubuntu@…)          |
+| Prometheus + Alertmanager | 10.10.2.21         | 9090, 9093              |
+| Grafana                | 10.10.1.19            | 3000                    |
+| OpenSearch             | 10.10.2.36            | 9200                    |
+| OpenSearch Dashboards  | 10.10.1.8             | 5601                    |
+| Web-ноды               | 10.10.2.33, 10.10.3.34| 4040 (nginxlog exporter)|
 
 ---
 
-## ⚙️ Ansible
+## Ansible
 
-Был подготовлен файл `inventory`:
-
+**inventory**
 ```ini
 [web]
 10.10.2.33 ansible_user=ubuntu
@@ -162,8 +161,7 @@ flowchart LR
 10.10.1.8 ansible_user=ubuntu
 ```
 
-Был настроен файл `ansible.cfg` для работы через Bastion-хост:
-
+**ansible.cfg**
 ```ini
 [defaults]
 inventory = ./inventory
@@ -175,26 +173,34 @@ ssh_args = -o ProxyJump=ubuntu@89.169.142.98
 
 ---
 
-## 🔑 Доступ (SSH-туннели)
+## Доступ (SSH-туннели)
 
-Было организовано подключение к сервисам через SSH-туннели.
-
-**Linux / macOS**
+### Linux / macOS
 ```bash
+# Prometheus (9090) + Alertmanager (9093)
 ssh -J ubuntu@89.169.142.98 -L 9090:127.0.0.1:9090 -L 9093:127.0.0.1:9093 ubuntu@10.10.2.21
+
+# Grafana (3000)
 ssh -J ubuntu@89.169.142.98 -L 3000:127.0.0.1:3000 ubuntu@10.10.1.19
+
+# OpenSearch Dashboards (5601)
 ssh -J ubuntu@89.169.142.98 -L 5601:127.0.0.1:5601 ubuntu@10.10.1.8
 ```
 
-**Windows PowerShell**
+### Windows PowerShell
 ```powershell
+# Prometheus + Alertmanager
 ssh -J ubuntu@89.169.142.98 `
     -L 9090:127.0.0.1:9090 `
     -L 9093:127.0.0.1:9093 `
     ubuntu@10.10.2.21
+
+# Grafana
 ssh -J ubuntu@89.169.142.98 `
     -L 3000:127.0.0.1:3000 `
     ubuntu@10.10.1.19
+
+# OpenSearch Dashboards
 ssh -J ubuntu@89.169.142.98 `
     -L 5601:127.0.0.1:5601 `
     ubuntu@10.10.1.8
@@ -202,10 +208,9 @@ ssh -J ubuntu@89.169.142.98 `
 
 ---
 
-## 🔍 OpenSearch / Dashboards
+## OpenSearch / Dashboards
 
-Был установлен и запущен OpenSearch Dashboards с отключённым security-плагином:
-
+Контейнер OpenSearch Dashboards был запущен на `10.10.1.8:5601` с отключённым security-плагином:
 ```bash
 docker run -d --name osd --restart unless-stopped \
   -p 5601:5601 \
@@ -214,15 +219,15 @@ docker run -d --name osd --restart unless-stopped \
   opensearchproject/opensearch-dashboards:2.13.0
 ```
 
-Был создан Index pattern: `nginx-*`  
-В разделе Discover и Visualize построены панели по `remote_addr`, `status`, `request_time` и другим метрикам.
+В Dashboards:
+- **Index pattern:** `nginx-*`
+- **Discover/Visualize:** панели по `remote_addr`, `status`, `request_time` и др.
 
 ---
 
-## 📊 Prometheus
+## Prometheus
 
-Prometheus был настроен с конфигом `/etc/prometheus/prometheus.yml`:
-
+**/etc/prometheus/prometheus.yml**
 ```yaml
 global:
   scrape_interval: 15s
@@ -247,18 +252,16 @@ alerting:
 
 ---
 
-## 📌 Экспортеры nginx логов
+## Экспортеры nginx логов
 
-Был настроен формат логов `/etc/nginx/conf.d/logformat_timed.conf`:
-
+Формат логов `/etc/nginx/conf.d/logformat_timed.conf`:
 ```nginx
 log_format main_timed '$remote_addr - $remote_user [$time_local] "$request" '
                       '$status $body_bytes_sent "$http_referer" "$http_user_agent" '
                       '$request_time';
 ```
 
-Был установлен и настроен экспортер `/etc/nginxlog_exporter.yml`:
-
+Экспортер `/etc/nginxlog_exporter.yml`:
 ```yaml
 listen:
   address: 0.0.0.0
@@ -272,7 +275,7 @@ namespaces:
     histogram_buckets: [0.05, 0.1, 0.2, 0.5, 1, 2, 5]
 ```
 
-Был запущен контейнер с экспортером:
+Запуск контейнера экспортера:
 ```bash
 docker run -d --name nginxlog-exporter --restart unless-stopped \
   -p 4040:4040 \
@@ -282,11 +285,16 @@ docker run -d --name nginxlog-exporter --restart unless-stopped \
   -config-file /config.yml
 ```
 
+Проверка метрик на ноде:
+```bash
+curl -s http://127.0.0.1:4040/metrics | grep -m1 '^nginx_http_response_count_total'
+```
+
 ---
 
-## 🚨 Правила алертов
+## Правила алертов
 
-Были добавлены правила алертов `/etc/prometheus/rules/nginx.yml`:
+**/etc/prometheus/rules/nginx.yml**
 ```yaml
 groups:
 - name: nginx-alerts
@@ -298,13 +306,56 @@ groups:
     for: 5m
     labels: { severity: warning }
     annotations: { summary: '5xx > 5% ({{$labels.instance}})' }
+
+  - alert: High5xxShareCritical
+    expr: |
+      100 * (sum(rate(nginx_http_response_count_total{status=~"5.."}[5m])) or vector(0))
+        / clamp_min(sum(rate(nginx_http_response_count_total[5m])), 1e-12) > 20
+    for: 5m
+    labels: { severity: critical }
+    annotations: { summary: '5xx > 20% ({{$labels.instance}})' }
+
+  - alert: SlowP95Warning
+    expr: |
+      histogram_quantile(0.95,
+        sum by (le) (rate({__name__=~"nginx_http_.*_time_seconds_bucket"}[5m]))
+      ) > 0.5
+    for: 10m
+    labels: { severity: warning }
+    annotations: { summary: 'p95 > 0.5s ({{$labels.instance}})' }
+
+  - alert: SlowP95Critical
+    expr: |
+      histogram_quantile(0.95,
+        sum by (le) (rate({__name__=~"nginx_http_.*_time_seconds_bucket"}[5m]))
+      ) > 1.5
+    for: 5m
+    labels: { severity: critical }
+    annotations: { summary: 'p95 > 1.5s ({{$labels.instance}})' }
 ```
+
+> Дополнительно использовались общие правила `/etc/prometheus/rules/general.yml` (Watchdog, InstanceDown, CPU, Disk).
 
 ---
 
-## 📧 Alertmanager (почта)
+## Alertmanager (почта)
 
-Была настроена отправка уведомлений по email в `alertmanager.yml.j2`:
+Secrets (Ansible Vault) — **group_vars/all/vault.yml** (зашифрованный):
+```yaml
+alertmanager_gmail_user: "example@gmail.com"
+alertmanager_gmail_app_password: "<app_password_here>"
+```
+
+Файл пароля:
+```bash
+printf '%s\n' '******' > ~/.vault_pass.txt
+chmod 600 ~/.vault_pass.txt
+
+# Проверка
+ansible-vault view group_vars/all/vault.yml
+```
+
+Шаблон конфигурации — **alertmanager.yml.j2**:
 ```yaml
 global:
   smtp_smarthost: 'smtp.gmail.com:587'
@@ -312,13 +363,53 @@ global:
   smtp_auth_username: '{{ alertmanager_gmail_user }}'
   smtp_auth_password: '{{ alertmanager_gmail_app_password }}'
   smtp_require_tls: true
+
+route:
+  group_by: ['alertname']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: email_me
+
+receivers:
+  - name: email_me
+    email_configs:
+      - to: '{{ alertmanager_gmail_user }}'
+        send_resolved: true
+        headers:
+          Subject: '[Alertmanager] {{ .Status | toUpper }} {{ .CommonLabels.alertname }}'
+```
+
+Деплой и рестарт Alertmanager:
+```bash
+ansible -i inventory prometheus -b -m template \
+  -a "src=alertmanager.yml.j2 dest=/etc/alertmanager/alertmanager.yml mode=0600"
+
+ansible -i inventory prometheus -b -m systemd \
+  -a "name=alertmanager state=restarted"
+```
+
+Смоук-тест почты (создание тестового алерта):
+```bash
+ansible -i inventory prometheus -m shell -a '
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ);
+END=$(date -u -d "+2 minutes" +%Y-%m-%dT%H:%M:%SZ);
+cat > /tmp/test-alert.json <<JSON
+[
+  {"labels":{"alertname":"TestEmail","severity":"warning"},
+   "annotations":{"summary":"Test email via Alertmanager (Gmail)"},
+   "startsAt":"'"$TS"'","endsAt":"'"$END"'"}]
+JSON
+curl -s -X POST -H "Content-Type: application/json" \
+  --data-binary @/tmp/test-alert.json http://127.0.0.1:9093/api/v2/alerts; echo
+'
 ```
 
 ---
 
-## 📈 Grafana
+## Grafana
 
-Был создан провайдер `grafana_dash_provider.yml`:
+Провижнинг — **grafana_dash_provider.yml**
 ```yaml
 apiVersion: 1
 providers:
@@ -332,43 +423,81 @@ providers:
       path: /var/lib/grafana/dashboards
 ```
 
----
+Копирование и активация провижнинга внутри контейнера:
+```bash
+ansible -i inventory grafana -b -m copy -a "src=grafana_dash_provider.yml dest=/tmp/kursovaya_provider.yml mode=0644"
+ansible -i inventory grafana -b -m copy -a "src=kursovaya-nginx.json dest=/tmp/kursovaya-nginx.json mode=0644"
 
-## 💾 Резервное копирование
-
-Было организовано point-in-time резервное копирование:
-- **Prometheus:** `/etc/prometheus`, `/var/lib/prometheus`
-- **Alertmanager:** `/etc/alertmanager`, `/var/lib/alertmanager`
-- **Grafana:** `/var/lib/grafana`, `/etc/grafana/provisioning`
-
----
-
-## 🚀 Порядок развертывания
-1. Подготовлена инфраструктура и развернуты все хосты (Bastion, Prometheus, Grafana, OpenSearch, Web-ноды).
-2. Настроен Ansible (`inventory` и `ansible.cfg`).
-3. Установлены Prometheus, Alertmanager и экспортеры.
-4. Развернута Grafana и загружены дашборды.
-5. Установлен и настроен OpenSearch Dashboards с индексами `nginx-*`.
-6. Проверена доступность сервисов через SSH-туннели.
-7. Проверено отображение метрик и логов в Grafana и OpenSearch.
-8. Выполнено тестирование резервного копирования.
+ansible -i inventory grafana -b -m shell -a '
+CN=$(docker ps --filter "publish=3000" --format "{{.Names}}" | head -n1); [ -n "$CN" ];
+docker exec -u 0 "$CN" mkdir -p /etc/grafana/provisioning/dashboards /var/lib/grafana/dashboards;
+docker cp /tmp/kursovaya_provider.yml  "$CN":/etc/grafana/provisioning/dashboards/kursovaya.yml;
+docker cp /tmp/kursovaya-nginx.json   "$CN":/var/lib/grafana/dashboards/kursovaya-nginx.json;
+docker exec -u 0 "$CN" sh -c "chown -R 472:472 /var/lib/grafana/dashboards || true";
+docker restart "$CN"
+'
+```
 
 ---
 
-## 🖼 Скриншоты работы системы
-*(Вставить скриншоты работы системы для подтверждения выполнения работы)*
-1. **Prometheus Targets**
-2. **Grafana Dashboard**
-3. **OpenSearch Dashboards Discover**
-4. **Срабатывание алертов в Alertmanager**
+## Резервное копирование
 
-Где лежат бэкапы и формат имён
-На соответствующих хостах в каталоге /root/backups/:
-prometheus_YYYY-MM-DD_HHMM.tgz
-alertmanager_YYYY-MM-DD_HHMM.tgz
-grafana_YYYY-MM-DD_HHMM.tgz
+Реализовано point-in-time резервное копирование данных сервисов:
+- **Prometheus:** `/etc/prometheus`, `/var/lib/prometheus` (при съёме архива сервис останавливался и запускался обратно).
+- **Alertmanager:** `/etc/alertmanager`, `/var/lib/alertmanager` (state небольшой; снимок без остановки).
+- **Grafana:** `/var/lib/grafana`, `/etc/grafana/provisioning` (внутри контейнера).
 
-Пояснение почему OpenSearch Dashboard: 
+### Snapshot дисков виртуальных машин в Yandex Cloud
+
+1. Созданы snapshot всех дисков ВМ (Bastion, Prometheus, Grafana, OpenSearch, Web-ноды).
+2. Настроено время жизни snapshot — **7 дней** (TTL).
+3. Настроено **ежедневное** автоматическое создание snapshot по расписанию.
+4. График запуска — **03:00 UTC**.
+5. Проверена возможность восстановления ВМ из snapshot.
+
+Создание snapshot вручную:
+```bash
+yc compute snapshot create \
+  --name prom-snap-$(date +%F) \
+  --disk-id <disk_id_prometheus> \
+  --description "Daily snapshot Prometheus"
+```
+
+Создание расписания snapshot (ежедневно, TTL 7 дней):
+```bash
+yc compute snapshot-schedule create \
+  --name daily-backups \
+  --description "Ежедневное создание snapshot с TTL 7 дней" \
+  --expression "0 3 * * *" \
+  --snapshot-retention-period 168h \
+  --disk-ids <disk_id_prometheus>,<disk_id_grafana>,<disk_id_opensearch>
+```
+
+Проверка:
+```bash
+yc compute snapshot-schedule list
+yc compute snapshot list
+```
+
+(Опционально) Проверка локальных архивов конфигов/данных:
+```bash
+ls -lh /root/backups | grep -E 'prometheus|alertmanager|grafana' || true
+```
+
+---
+
+## Порядок развертывания
+
+1. Подготовлена инфраструктура в Yandex Cloud и развернуты узлы: Bastion, Prometheus/Alertmanager, Grafana, OpenSearch, OpenSearch Dashboards, web-ноды.
+2. Настроен доступ через Bastion (SSH ProxyJump), подготовлены `inventory` и `ansible.cfg`.
+3. Установлены Prometheus и Alertmanager; добавлены правила алертинга; запущены экспортеры на web-нодах.
+4. Развернута Grafana; загружен провайдер и дашборды; перезапущен контейнер.
+5. Развёрнут OpenSearch и OpenSearch Dashboards; создан индекс-паттерн `nginx-*`; построены панели Discover/Visualize.
+6. Проведена проверка доступности сервисов через SSH-туннели (9090, 9093, 3000, 5601).
+7. Подтверждено получение метрик и логов; проведён смоук-тест Alertmanager (email).
+8. Организовано резервное копирование: локальные архивы данных, а также snapshot дисков ВМ с ежедневным расписанием и TTL 7 дней.
+
+---
 
 
 Совместимость 100%. Kibana — продукт Elastic и официально не поддерживает OpenSearch 2.x. Даже если “подружить”, начнутся баги с API/миграциями. OpenSearch Dashboards — форк Kibana 7.10, развивается вместе с OpenSearch, поэтому всё (Discover, визуализации, Saved Objects) работает из коробки.
@@ -378,8 +507,8 @@ grafana_YYYY-MM-DD_HHMM.tgz
 Меньше рисков по версиям. Бэкенд 2.13.0 ↔️ Dashboards 2.13.0 — одна ветка релизов, нет рассинхрона.
 Итого: это самый надёжный и беспроблемный UI для нашего стека логов на OpenSearch.
 
+## Скриншоты работы системы
 
-Скриншоты:
 <img width="3047" height="994" alt="Alert" src="https://github.com/user-attachments/assets/619b1af1-80c8-4cfe-b1f2-b21fc76f0939" />
 <img width="2529" height="1344" alt="Grafana" src="https://github.com/user-attachments/assets/1aa07433-a8cb-4ecc-9413-debbea986efc" />
 <img width="2549" height="1224" alt="Grafana_dash" src="https://github.com/user-attachments/assets/a0787f54-fd4b-4f24-8c26-2df5ea084eeb" />
