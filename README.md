@@ -96,34 +96,52 @@ Cоздайте ВМ, разверните на ней Elasticsearch. Устан
 
 ## Архитектура
 
-```mermaid
 flowchart LR
-    user[Локальный ПК] -->|SSH ProxyJump| bastion[(Bastion)\n89.169.142.98]
-    bastion -->|SSH| prom[(Prometheus/Alertmanager)\n10.10.2.21]
-    bastion -->|SSH| grafana[(Grafana)\n10.10.1.19]
-    bastion -->|SSH| osd[(OpenSearch Dashboards)\n10.10.1.8]
-    bastion -->|SSH| ose[(OpenSearch)\n10.10.2.36]
+    %% Узлы
+    user["Локальный ПК"]
+    bastion["Bastion<br/>89.169.142.98"]
+
+    prom["Prometheus + Alertmanager<br/>10.10.2.21"]
+    grafana["Grafana<br/>10.10.1.19"]
+    osd["OpenSearch Dashboards<br/>10.10.1.8"]
+    ose["OpenSearch<br/>10.10.2.36"]
 
     subgraph WEB-NODES
-      web1[(Web #1 nginx)\n10.10.2.33]
-      web2[(Web #2 nginx)\n10.10.3.34]
+      web1["Web #1 nginx<br/>10.10.2.33"]
+      web2["Web #2 nginx<br/>10.10.3.34"]
     end
 
+    exporter1["nginxlog exporter<br/>4040"]
+    exporter2["nginxlog exporter<br/>4040"]
+    fluent1["fluent-bit"]
+    fluent2["fluent-bit"]
+    amgr["Alertmanager (на 10.10.2.21)"]
+
+    %% Подключения
+    user -->|SSH ProxyJump| bastion
+    bastion -->|SSH| prom
+    bastion -->|SSH| grafana
+    bastion -->|SSH| osd
+    bastion -->|SSH| ose
+
+    %% Интеграции мониторинга
     prom <-->|HTTP 9090| grafana
-    prom <-->|/api 9093| amgr[(Alertmanager в составе 10.10.2.21)]
+    prom <-->|/api 9093| amgr
     grafana -->|Prometheus datasource| prom
 
-    web1 -->|nginx access.log| exporter1[[nginxlog exporter 4040]]
-    web2 -->|nginx access.log| exporter2[[nginxlog exporter 4040]]
+    %% Экспортеры nginx
+    web1 -->|nginx access.log| exporter1
+    web2 -->|nginx access.log| exporter2
     prom -->|scrape 4040| exporter1
     prom -->|scrape 4040| exporter2
 
-    web1 -->|файловые логи| fluent1[[fluent-bit]]
-    web2 -->|файловые логи| fluent2[[fluent-bit]]
+    %% Логи в OpenSearch
+    web1 -->|файловые логи| fluent1
+    web2 -->|файловые логи| fluent2
     fluent1 -->|HTTP 9200| ose
     fluent2 -->|HTTP 9200| ose
     osd -->|HTTP 5601| ose
-```
+
 
 ---
 
